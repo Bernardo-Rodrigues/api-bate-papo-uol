@@ -50,6 +50,14 @@ app.post("/participantes", async (req, res) => {
     mongoClient.close()
 })
 
+app.get("/participantes", async (req, res) => {
+    const participants = await getCollection("participants")
+    const allParticipantes = await participants.find({}).toArray()
+    
+    res.send(allParticipantes)
+
+    mongoClient.close()
+})
 
 app.listen(4000, ()=>{
     console.log("Server listening on Port 4000")
