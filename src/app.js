@@ -21,7 +21,7 @@ async function getCollection(collectionName){
     return collection
 }
 
-app.post("/participantes", async (req, res) => {
+app.post("/participants", async (req, res) => {
     const name = req.body.name
 
     try{
@@ -50,11 +50,33 @@ app.post("/participantes", async (req, res) => {
     mongoClient.close()
 })
 
-app.get("/participantes", async (req, res) => {
+app.get("/participants", async (req, res) => {
     const participants = await getCollection("participants")
     const allParticipantes = await participants.find({}).toArray()
     
     res.send(allParticipantes)
+
+    mongoClient.close()
+})
+
+app.post("/messages", async (req, res) => {
+    const from = req.headers.user
+    const [to, text, type] = [req.body.to, req.body.text, req.body.type]
+
+    try {
+        const messages = await getCollection("messages")
+
+        await messages.insertOne({
+            from, 
+            to, 
+            text, 
+            type, 
+            time: dayjs().format('HH:mm:ss')
+        })
+        res.sendStatus(201)
+    } catch (error) {
+        console.error(error)
+    }
 
     mongoClient.close()
 })
