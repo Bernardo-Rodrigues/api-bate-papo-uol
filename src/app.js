@@ -25,16 +25,15 @@ app.post("/participants", async (req, res) => {
     const name = req.body.name
 
     try{
-        const participants = await getCollection("participants")
-        const sameName = await participants.find({name}).toArray()
+        const participantsCollection = await getCollection("participants")
+        const paritipants = await participantsCollection.find({name}).toArray()
 
-        if(sameName.length) res.sendStatus(409)
+        if(paritipants.length) res.sendStatus(409)
         else{
-            participants.insertOne({name, lastStatus: Date.now()})
-            console.log(dayjs().format('HH:mm:ss'))
+            participantsCollection.insertOne({name, lastStatus: Date.now()})
     
-            const messages = await getCollection("messages")
-            await messages.insertOne({
+            const messagesCollection = await getCollection("messages")
+            await messagesCollection.insertOne({
                 from: name, 
                 to: 'Todos', 
                 text: 'entra na sala...', 
@@ -51,10 +50,10 @@ app.post("/participants", async (req, res) => {
 })
 
 app.get("/participants", async (req, res) => {
-    const participants = await getCollection("participants")
-    const allParticipantes = await participants.find({}).toArray()
+    const participantsCollection = await getCollection("participants")
+    const participants = await participantsCollection.find({}).toArray()
     
-    res.send(allParticipantes)
+    res.send(participants)
 
     mongoClient.close()
 })
@@ -64,9 +63,9 @@ app.post("/messages", async (req, res) => {
     const [to, text, type] = [req.body.to, req.body.text, req.body.type]
 
     try {
-        const messages = await getCollection("messages")
+        const messagesCollection = await getCollection("messages")
 
-        await messages.insertOne({
+        await messagesCollection.insertOne({
             from, 
             to, 
             text, 
@@ -79,6 +78,21 @@ app.post("/messages", async (req, res) => {
     }
 
     mongoClient.close()
+})
+
+app.get("/messages", async (req, res) => {
+    const limit = req.query.limit
+    const user = req.headers.user
+
+    const messagesCollection = await getCollection("messages")
+    const messages = await messagesCollection.find({}).toArray()
+
+    const filteredMessages = messages.filter( message => message.type === "message" || message.type === "status" || message.from === user || message.to === user)
+    
+    if(!limit) res.send(filteredMessages)
+    else{
+        res.send(filteredMessages.slice(-limit))
+    }
 })
 
 app.listen(4000, ()=>{
