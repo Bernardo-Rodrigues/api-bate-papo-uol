@@ -50,6 +50,7 @@ app.post("/participantes", async (req, res) => {
     mongoClient.close()
 })
 
+
 app.listen(4000, ()=>{
     console.log("Server listening on Port 4000")
 })
