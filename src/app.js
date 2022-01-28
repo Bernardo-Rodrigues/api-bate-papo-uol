@@ -3,11 +3,23 @@ import cors from "cors"
 import { MongoClient } from "mongodb"
 import dotenv from "dotenv"
 import dayjs from "dayjs"
+import joi from "joi"
 dotenv.config()
 
 const app = express()
 app.use(cors())
 app.use(json())
+
+const userSchema = joi.object({
+    name: joi.string().required()
+});
+
+const messageSchema = joi.object({
+    from: joi.string().required(),
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.valid("message", "private_message").required()
+});
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 
@@ -17,7 +29,7 @@ setInterval( async ()=> {
         const messagesCollection = await getCollection("messages")
         const participants = await participantsCollection.find({}).toArray()
     
-        participants.forEach( async participant => {
+        for(const participant of participants){
             if(participant.lastStatus < Date.now() - 10000){
                 await participantsCollection.deleteOne({_id: participant._id})
                 await messagesCollection.insertOne({
@@ -28,10 +40,11 @@ setInterval( async ()=> {
                     time: dayjs().format('HH:mm:ss')
                 })
             }
-        })
+        }
     } catch (error) {
         res.status(500).send(error)
     }
+    mongoClient.close()
 }, 15000)
 
 async function getCollection(collectionName){
@@ -48,7 +61,13 @@ async function getCollection(collectionName){
 }
 
 app.post("/participants", async (req, res) => {
-    const name = req.body.name
+    const { name } = req.body
+    const validation = userSchema.validate(req.body, { abortEarly: false })
+
+    if (validation.error) {
+        res.status(422).send(validation.error.message);
+        return
+    }
 
     try{
         const participantsCollection = await getCollection("participants")
@@ -89,6 +108,17 @@ app.post("/messages", async (req, res) => {
     const [to, text, type] = [req.body.to, req.body.text, req.body.type]
 
     try {
+        const participantsCollection = await getCollection("participants")
+        const participant = await participantsCollection.findOne({name:from})
+        if(!participant) res.status(422).send("The user is not participating in the chat, perhaps he has been disconnected")
+
+        const validation = messageSchema.validate({from, to, text, type},{abortEarly:false})
+
+        if (validation.error) {
+            res.status(422).send(validation.error.message);
+            return
+        }
+
         const messagesCollection = await getCollection("messages")
 
         await messagesCollection.insertOne({
