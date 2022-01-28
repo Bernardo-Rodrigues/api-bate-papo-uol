@@ -9,16 +9,19 @@ const app = express()
 app.use(cors())
 app.use(json())
 
-
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 
 async function getCollection(collectionName){
-    await mongoClient.connect()
-
-    const db = mongoClient.db("api-bate-papo-uol");
-    const collection = db.collection(collectionName)
-
-    return collection
+    try {
+        await mongoClient.connect()
+    
+        const db = mongoClient.db("api-bate-papo-uol");
+        const collection = db.collection(collectionName)
+    
+        return collection
+    } catch (error) {
+        res.status(500).send(error)
+    }
 }
 
 app.post("/participants", async (req, res) => {
@@ -26,9 +29,9 @@ app.post("/participants", async (req, res) => {
 
     try{
         const participantsCollection = await getCollection("participants")
-        const paritipants = await participantsCollection.find({name}).toArray()
+        const participant = await participantsCollection.findOne({name})
 
-        if(paritipants.length) res.sendStatus(409)
+        if(participant) res.sendStatus(409)
         else{
             participantsCollection.insertOne({name, lastStatus: Date.now()})
     
@@ -43,7 +46,7 @@ app.post("/participants", async (req, res) => {
             res.sendStatus(201)
         }
     } catch (error) {
-        console.error( error)
+        res.status(500).send(error)
     }
 
     mongoClient.close()
@@ -74,7 +77,7 @@ app.post("/messages", async (req, res) => {
         })
         res.sendStatus(201)
     } catch (error) {
-        console.error(error)
+        res.status(500).send(error)
     }
 
     mongoClient.close()
@@ -84,15 +87,45 @@ app.get("/messages", async (req, res) => {
     const limit = req.query.limit
     const user = req.headers.user
 
-    const messagesCollection = await getCollection("messages")
-    const messages = await messagesCollection.find({}).toArray()
-
-    const filteredMessages = messages.filter( message => message.type === "message" || message.type === "status" || message.from === user || message.to === user)
+    try {
+        const messagesCollection = await getCollection("messages")
+        const messages = await messagesCollection.find({}).toArray()
     
-    if(!limit) res.send(filteredMessages)
-    else{
-        res.send(filteredMessages.slice(-limit))
+        const filteredMessages = messages.filter( message => message.type === "message" || message.type === "status" || message.from === user || message.to === user)
+        
+        if(!limit) res.send(filteredMessages)
+        else{
+            res.send(filteredMessages.slice(-limit))
+        }
+    } catch (error) {
+        res.status(500).send(error)
     }
+
+    mongoClient.close()
+})
+
+app.post("/status", async (req,res) => {
+    const { user } = req.headers
+
+    try {
+        const participantsCollection = await getCollection("participants")
+        const participant = await participantsCollection.findOne({name:user})
+    
+        if(!participant) res.sendStatus(404)
+        else{
+            await participantsCollection.updateOne({
+                _id: participant._id
+            },{
+                $set: { lastStatus: Date.now()  }
+            })
+    
+            res.sendStatus(200)
+        }        
+    } catch (error) {
+        res.status(500).send(error)
+    }
+
+    mongoClient.close()
 })
 
 app.listen(4000, ()=>{
