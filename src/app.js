@@ -11,6 +11,29 @@ app.use(json())
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 
+setInterval( async ()=> {
+    try {
+        const participantsCollection = await getCollection("participants")
+        const messagesCollection = await getCollection("messages")
+        const participants = await participantsCollection.find({}).toArray()
+    
+        participants.forEach( async participant => {
+            if(participant.lastStatus < Date.now() - 10000){
+                await participantsCollection.deleteOne({_id: participant._id})
+                await messagesCollection.insertOne({
+                    from: participant.name,
+                    to: "Todos",
+                    text: "sai da sala...", 
+                    type: "status", 
+                    time: dayjs().format('HH:mm:ss')
+                })
+            }
+        })
+    } catch (error) {
+        res.status(500).send(error)
+    }
+}, 15000)
+
 async function getCollection(collectionName){
     try {
         await mongoClient.connect()
