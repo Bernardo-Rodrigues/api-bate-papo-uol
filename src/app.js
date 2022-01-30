@@ -1,6 +1,6 @@
 import express, {json} from "express"
 import cors from "cors"
-import { MongoClient } from "mongodb"
+import { MongoClient, ObjectId } from "mongodb"
 import dotenv from "dotenv"
 import dayjs from "dayjs"
 import { stripHtml } from "string-strip-html";
@@ -29,29 +29,29 @@ function sanitizeString(string){
     return trim(stripHtml(string).result)
 }
 
-setInterval( async ()=> {
-    try {
-        const participantsCollection = await getCollection("participants")
-        const messagesCollection = await getCollection("messages")
-        const participants = await participantsCollection.find({}).toArray()
+// setInterval( async ()=> {
+//     try {
+//         const participantsCollection = await getCollection("participants")
+//         const messagesCollection = await getCollection("messages")
+//         const participants = await participantsCollection.find({}).toArray()
     
-        for(const participant of participants){
-            if(participant.lastStatus < Date.now() - 10000){
-                await participantsCollection.deleteOne({_id: participant._id})
-                await messagesCollection.insertOne({
-                    from: participant.name,
-                    to: "Todos",
-                    text: "sai da sala...", 
-                    type: "status", 
-                    time: dayjs().format('HH:mm:ss')
-                })
-            }
-        }
-    } catch (error) {
-        res.status(500).send(error)
-    }
-    mongoClient.close()
-}, 15000)
+//         for(const participant of participants){
+//             if(participant.lastStatus < Date.now() - 10000){
+//                 await participantsCollection.deleteOne({_id: participant._id})
+//                 await messagesCollection.insertOne({
+//                     from: participant.name,
+//                     to: "Todos",
+//                     text: "sai da sala...", 
+//                     type: "status", 
+//                     time: dayjs().format('HH:mm:ss')
+//                 })
+//             }
+//         }
+//     } catch (error) {
+//         res.status(500).send(error)
+//     }
+//     mongoClient.close()
+// }, 15000)
 
 async function getCollection(collectionName){
     try {
@@ -79,7 +79,7 @@ app.post("/participants", async (req, res) => {
         const participantsCollection = await getCollection("participants")
         const participant = await participantsCollection.findOne({name})
 
-        if(participant) res.sendStatus(409)
+        if(participant) res.status(409).send("User already connected")
         else{
             participantsCollection.insertOne({name, lastStatus: Date.now()})
     
@@ -148,7 +148,7 @@ app.post("/messages", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
     const { limit } = req.query
-    const { user } = req.headers
+    const user = sanitizeString(req.headers.user)
 
     try {
         const messagesCollection = await getCollection("messages")
@@ -186,7 +186,6 @@ app.post("/status", async (req,res) => {
             },{
                 $set: { lastStatus: Date.now()  }
             })
-    
             res.sendStatus(200)
         }        
     } catch (error) {
@@ -194,6 +193,25 @@ app.post("/status", async (req,res) => {
     }
 
     mongoClient.close()         
+})
+
+app.delete("/messages/:id", async (req, res) => {
+    const user = sanitizeString(req.headers.user)
+    const { id } = req.params
+
+    try {
+        const messagesCollection = await getCollection("messages")
+        const message = await messagesCollection.findOne({ _id: new ObjectId(id)})
+        
+        if(!message) res.status(404).send("Message not found")
+        else if(message.from !== user) res.status(401).send("This message is not yours")
+        else{
+            await messagesCollection.deleteOne({ _id: new ObjectId(id)})
+            res.sendStatus(200)
+        }
+    } catch (error) {
+        res.status(500).send(error)
+    }
 })
 
 app.listen(4000, ()=>{
