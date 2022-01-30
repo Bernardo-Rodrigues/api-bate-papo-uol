@@ -3,6 +3,8 @@ import cors from "cors"
 import { MongoClient } from "mongodb"
 import dotenv from "dotenv"
 import dayjs from "dayjs"
+import { stripHtml } from "string-strip-html";
+import trim from "trim"
 import joi from "joi"
 dotenv.config()
 
@@ -22,6 +24,10 @@ const messageSchema = joi.object({
 });
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+function sanitizeString(string){
+    return trim(stripHtml(string).result)
+}
 
 setInterval( async ()=> {
     try {
@@ -61,7 +67,7 @@ async function getCollection(collectionName){
 }
 
 app.post("/participants", async (req, res) => {
-    const { name } = req.body
+    const name = sanitizeString(req.body.name)
     const validation = userSchema.validate(req.body, { abortEarly: false })
 
     if (validation.error) {
@@ -90,7 +96,6 @@ app.post("/participants", async (req, res) => {
     } catch (error) {
         res.status(500).send(error)
     }
-
     mongoClient.close()
 })
 
@@ -104,12 +109,17 @@ app.get("/participants", async (req, res) => {
 })
 
 app.post("/messages", async (req, res) => {
-    const from = req.headers.user
-    const [to, text, type] = [req.body.to, req.body.text, req.body.type]
-
+    const from = sanitizeString(req.headers.user)
+    const [to, text, type] = [
+        sanitizeString(req.body.to),
+        sanitizeString(req.body.text),
+        sanitizeString(req.body.type)
+    ]
+    
     try {
         const participantsCollection = await getCollection("participants")
         const participant = await participantsCollection.findOne({name:from})
+
         if(!participant) res.status(422).send("The user is not participating in the chat, perhaps he has been disconnected")
 
         const validation = messageSchema.validate({from, to, text, type},{abortEarly:false})
@@ -137,18 +147,23 @@ app.post("/messages", async (req, res) => {
 })
 
 app.get("/messages", async (req, res) => {
-    const limit = req.query.limit
-    const user = req.headers.user
+    const { limit } = req.query
+    const { user } = req.headers
 
     try {
         const messagesCollection = await getCollection("messages")
-        const messages = await messagesCollection.find({}).toArray()
+        const messages = await messagesCollection.find({ 
+            $or: [ 
+                {type: "message"}, 
+                {type: "status"}, 
+                {from: user}, 
+                {to: user}
+            ]
+        }).toArray()
     
-        const filteredMessages = messages.filter( message => message.type === "message" || message.type === "status" || message.from === user || message.to === user)
-        
-        if(!limit) res.send(filteredMessages)
+        if(!limit) res.send(messages)
         else{
-            res.send(filteredMessages.slice(-limit))
+            res.send(messages.slice(-limit))
         }
     } catch (error) {
         res.status(500).send(error)
@@ -158,7 +173,7 @@ app.get("/messages", async (req, res) => {
 })
 
 app.post("/status", async (req,res) => {
-    const { user } = req.headers
+    const user = sanitizeString(req.headers.user)
 
     try {
         const participantsCollection = await getCollection("participants")
@@ -178,7 +193,7 @@ app.post("/status", async (req,res) => {
         res.status(500).send(error)
     }
 
-    mongoClient.close()
+    mongoClient.close()         
 })
 
 app.listen(4000, ()=>{
