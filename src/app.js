@@ -3,8 +3,6 @@ import cors from "cors"
 import { MongoClient, ObjectId } from "mongodb"
 import dotenv from "dotenv"
 import dayjs from "dayjs"
-import { stripHtml } from "string-strip-html";
-import trim from "trim"
 import joi from "joi"
 dotenv.config()
 
@@ -25,6 +23,7 @@ const messageSchema = joi.object({
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 
+<<<<<<< HEAD
 function sanitizeString(string){
     return trim(stripHtml(string).result)
 }
@@ -34,6 +33,13 @@ function sanitizeString(string){
 //         const participantsCollection = await getCollection("participants")
 //         const messagesCollection = await getCollection("messages")
 //         const participants = await participantsCollection.find({}).toArray()
+=======
+setInterval( async ()=> {
+    try {
+        const participantsCollection = await getCollection("participants")
+        const messagesCollection = await getCollection("messages")
+        const participants = await participantsCollection.find({}).toArray()
+>>>>>>> parent of 37bd313... feat: add data sanitization bonus
     
 //         for(const participant of participants){
 //             if(participant.lastStatus < Date.now() - 10000){
@@ -67,7 +73,7 @@ async function getCollection(collectionName){
 }
 
 app.post("/participants", async (req, res) => {
-    const name = sanitizeString(req.body.name)
+    const { name } = req.body
     const validation = userSchema.validate(req.body, { abortEarly: false })
 
     if (validation.error) {
@@ -96,6 +102,7 @@ app.post("/participants", async (req, res) => {
     } catch (error) {
         res.status(500).send(error)
     }
+
     mongoClient.close()
 })
 
@@ -109,17 +116,12 @@ app.get("/participants", async (req, res) => {
 })
 
 app.post("/messages", async (req, res) => {
-    const from = sanitizeString(req.headers.user)
-    const [to, text, type] = [
-        sanitizeString(req.body.to),
-        sanitizeString(req.body.text),
-        sanitizeString(req.body.type)
-    ]
-    
+    const from = req.headers.user
+    const [to, text, type] = [req.body.to, req.body.text, req.body.type]
+
     try {
         const participantsCollection = await getCollection("participants")
         const participant = await participantsCollection.findOne({name:from})
-
         if(!participant) res.status(422).send("The user is not participating in the chat, perhaps he has been disconnected")
 
         const validation = messageSchema.validate({from, to, text, type},{abortEarly:false})
@@ -147,23 +149,23 @@ app.post("/messages", async (req, res) => {
 })
 
 app.get("/messages", async (req, res) => {
+<<<<<<< HEAD
     const { limit } = req.query
     const user = sanitizeString(req.headers.user)
+=======
+    const limit = req.query.limit
+    const user = req.headers.user
+>>>>>>> parent of 37bd313... feat: add data sanitization bonus
 
     try {
         const messagesCollection = await getCollection("messages")
-        const messages = await messagesCollection.find({ 
-            $or: [ 
-                {type: "message"}, 
-                {type: "status"}, 
-                {from: user}, 
-                {to: user}
-            ]
-        }).toArray()
+        const messages = await messagesCollection.find({}).toArray()
     
-        if(!limit) res.send(messages)
+        const filteredMessages = messages.filter( message => message.type === "message" || message.type === "status" || message.from === user || message.to === user)
+        
+        if(!limit) res.send(filteredMessages)
         else{
-            res.send(messages.slice(-limit))
+            res.send(filteredMessages.slice(-limit))
         }
     } catch (error) {
         res.status(500).send(error)
@@ -173,7 +175,7 @@ app.get("/messages", async (req, res) => {
 })
 
 app.post("/status", async (req,res) => {
-    const user = sanitizeString(req.headers.user)
+    const { user } = req.headers
 
     try {
         const participantsCollection = await getCollection("participants")
@@ -192,7 +194,7 @@ app.post("/status", async (req,res) => {
         res.status(500).send(error)
     }
 
-    mongoClient.close()         
+    mongoClient.close()
 })
 
 app.delete("/messages/:id", async (req, res) => {
