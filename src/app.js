@@ -100,10 +100,14 @@ app.post("/participants", async (req, res) => {
 })
 
 app.get("/participants", async (req, res) => {
-    const participantsCollection = await getCollection("participants")
-    const participants = await participantsCollection.find({}).toArray()
-    
-    res.send(participants)
+    try {
+        const participantsCollection = await getCollection("participants")
+        const participants = await participantsCollection.find({}).toArray()
+        
+        res.send(participants)
+    } catch (error) {
+        res.status(500).send(error.message)
+    }
 
     mongoClient.close()
 })
@@ -257,7 +261,6 @@ app.post("/status", async (req,res) => {
     mongoClient.close()         
 })
 
-
-app.listen(4000, ()=>{
-    console.log("Server listening on Port 4000")
+app.listen(5000, ()=>{
+    console.log("Server listening on Port 5000")
 })
